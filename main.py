@@ -15,23 +15,23 @@ import math
 
 def schedule(paths,costs):
 	q = Q.PriorityQueue()
-	q.put((0,tuple(0 for key in paths)))
-	visited = [tuple(0 for key in paths)]
+	init_pos = tuple(0 for key in paths) 
+	#The data structure for priority queue is (cost,current,parent)
+	#parent is used to get the final path in C(EZ) if any 
+	q.put((0,init_pos,init_pos))
+	visited = [(0,init_pos,init_pos)]
 	goal = tuple(len(key)-1 for key in paths)
 
 	while not q.empty():
 		u = q.get() 
+		#print "pop: %s" % str(u)
+
 		if u[1] == goal:
-			
-			break
-		print "pop: %s" % str(u)
-		# print "visited: %s" % visited
+			return get_path(visited,goal)
 		#all possible neighbors
-		all_neighbors=[(u[0]+costs[i][u[1][i]+j-1 if j==1 else u[1][i]+j],u[1][:i]+(u[1][i]+j,)+u[1][i+1:]) for i in xrange(len(paths)) for j in [-1,1] if (u[1][i]+j>=0 and u[1][i]+j<len(paths[i])) ]
-		# print "all_neighbors: %s" % all_neighbors
-		#strip visited neighbors out
-		new_neighbors=[(i,j) for (i,j) in all_neighbors if j not in visited ]	
-		# print "new_neighbors: %s" % new_neighbors
+		all_neighbors=[(u[0]+costs[i][u[1][i]+j-1 if j==1 else u[1][i]+j],u[1][:i]+(u[1][i]+j,)+u[1][i+1:],u[1]) for i in xrange(len(paths)) for j in [-1,1] if (u[1][i]+j>=0 and u[1][i]+j<len(paths[i])) ]
+		#filter visited neighbors out
+		new_neighbors=[(i,j,k) for (i,j,k) in all_neighbors if j not in [x[1] for x in visited] ]	
 
 		#removing collisions(illegals)
 		for i in xrange(len(new_neighbors)):
@@ -44,11 +44,21 @@ def schedule(paths,costs):
 						k = len(new_neighbors[i][1])
 			if b:
 				q.put(new_neighbors[i])	
-				visited.append(new_neighbors[i][1])
-				# print "%s added to queue" % str(new_neighbors[i])
-		# print "\n"
+				visited.append(new_neighbors[i])
 
-	return 
+
+
+	return []
+
+def get_path(visited,goal):
+	path = [goal]
+	curr = goal
+	start = tuple(0 for k in range(len(goal)))
+	while curr != start:
+		curr = [(j,k) for (i,j,k) in visited if j==curr][0][1]
+		path.append(curr)
+	path.reverse()
+	return path
 
 def ezsolver(graph,starts,goals):
     (predecessor,distance) = floyd_warshall_predecessor_and_distance(graph, weight='weight')
@@ -79,7 +89,7 @@ costs=[[2,1,2],[2,2]]
 print "paths: %s" % paths
 print "costs: %s" % costs
 
-schedule(paths,costs)
+print "answer: %s" % schedule(paths,costs)
 # b = tuple(value[0] for key,value in pos.iteritems())
 # print b
 
