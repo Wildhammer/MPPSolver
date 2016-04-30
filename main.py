@@ -1,8 +1,3 @@
-#!/usr/bin/env python
-"""
-An example using Graph as a weighted network.
-"""
-# Author: Aric Hagberg (hagberg@lanl.gov)
 try:
     import matplotlib.pyplot as plt
 except:
@@ -14,12 +9,15 @@ from networkx.algorithms import floyd_warshall_predecessor_and_distance
 import math
 
 def schedule(paths,costs):
+	cumulative_cost = [[sum(k[i:]) if i!=len(k) else 0 for i in xrange(len(k)+1)] for k in costs]
+	print "cumulative_cost: %s" % cumulative_cost
 	q = Q.PriorityQueue()
 	init_pos = tuple(0 for key in paths) 
-	#The data structure for priority queue is (cost,current,parent)
+	#The data structure for priority queue is (f,current,parent,cost)
 	#parent is used to get the final path in C(EZ) if any 
-	q.put((0,init_pos,init_pos))
-	visited = [(0,init_pos,init_pos)]
+	init_h = sum([i[0] for i in cumulative_cost])
+	q.put((init_h,init_pos,init_pos,0))
+	visited = [(init_h,init_pos,init_pos,0)]
 	goal = tuple(len(key)-1 for key in paths)
 
 	while not q.empty():
@@ -29,9 +27,9 @@ def schedule(paths,costs):
 		if u[1] == goal:
 			return get_path(visited,goal)
 		#all possible neighbors
-		all_neighbors=[(u[0]+costs[i][u[1][i]+j-1 if j==1 else u[1][i]+j],u[1][:i]+(u[1][i]+j,)+u[1][i+1:],u[1]) for i in xrange(len(paths)) for j in [-1,1] if (u[1][i]+j>=0 and u[1][i]+j<len(paths[i])) ]
+		all_neighbors=[(u[3]+costs[i][u[1][i]+j-1 if j==1 else u[1][i]+j]+sum([cumulative_cost[i][u[1][i]+j] if c==i else cumulative_cost[c][u[1][c]] for c in xrange(len(costs))]),u[1][:i]+(u[1][i]+j,)+u[1][i+1:],u[1],u[3]+costs[i][u[1][i]+j-1 if j==1 else u[1][i]+j]) for i in xrange(len(paths)) for j in [-1,1] if (u[1][i]+j>=0 and u[1][i]+j<len(paths[i])) ]
 		#filter visited neighbors out
-		new_neighbors=[(i,j,k) for (i,j,k) in all_neighbors if j not in [x[1] for x in visited] ]	
+		new_neighbors=[(i,j,k,l) for (i,j,k,l) in all_neighbors if j not in [x[1] for x in visited] ]	
 
 		#removing collisions(illegals)
 		for i in xrange(len(new_neighbors)):
@@ -55,7 +53,7 @@ def get_path(visited,goal):
 	curr = goal
 	start = tuple(0 for k in range(len(goal)))
 	while curr != start:
-		curr = [(j,k) for (i,j,k) in visited if j==curr][0][1]
+		curr = [(j,k) for (i,j,k,l) in visited if j==curr][0][1]
 		path.append(curr)
 	path.reverse()
 	return path
