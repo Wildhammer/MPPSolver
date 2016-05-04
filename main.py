@@ -7,6 +7,10 @@ import networkx as nx
 import Queue as Q
 from networkx.algorithms import floyd_warshall_predecessor_and_distance
 import math
+import random
+
+def get_key(pose):
+	return "".join("{0}".format(n) for n in pose)
 
 def schedule(paths,costs):
 	cumulative_cost = [[sum(k[i:]) if i!=len(k) else 0 for i in xrange(len(k)+1)] for k in costs]
@@ -17,7 +21,7 @@ def schedule(paths,costs):
 	#parent is used to get the final path in C(EZ) if any 
 	init_h = sum([i[0] for i in cumulative_cost])
 	q.put((init_h,init_pos,init_pos,0))
-	visited = [(init_h,init_pos,init_pos,0)]
+	visited = {get_key(init_pos):(init_h,init_pos,init_pos,0)}#hashtable instead of array. use python built-in dict which is hashtable
 	goal = tuple(len(key)-1 for key in paths)
 
 	while not q.empty():
@@ -29,7 +33,7 @@ def schedule(paths,costs):
 		#all possible neighbors
 		all_neighbors=[(u[3]+costs[i][u[1][i]+j-1 if j==1 else u[1][i]+j]+sum([cumulative_cost[i][u[1][i]+j] if c==i else cumulative_cost[c][u[1][c]] for c in xrange(len(costs))]),u[1][:i]+(u[1][i]+j,)+u[1][i+1:],u[1],u[3]+costs[i][u[1][i]+j-1 if j==1 else u[1][i]+j]) for i in xrange(len(paths)) for j in [-1,1] if (u[1][i]+j>=0 and u[1][i]+j<len(paths[i])) ]
 		#filtering out visited neighbors
-		new_neighbors=[(i,j,k,l) for (i,j,k,l) in all_neighbors if j not in [x[1] for x in visited] ]	
+		new_neighbors=[(i,j,k,l) for (i,j,k,l) in all_neighbors if get_key(j) not in visited.keys()  ]	
 
 		#removing collisions(illegals)
 		for i in xrange(len(new_neighbors)):
@@ -42,7 +46,7 @@ def schedule(paths,costs):
 						k = len(new_neighbors[i][1])
 			if b:
 				q.put(new_neighbors[i])	
-				visited.append(new_neighbors[i])
+				visited[get_key(new_neighbors[i][1])] = new_neighbors[i]
 
 	return []
 
@@ -51,7 +55,8 @@ def get_path_in_cez(visited,goal):
 	curr = goal
 	start = tuple(0 for k in range(len(goal)))
 	while curr != start:
-		curr = [(j,k) for (i,j,k,l) in visited if j==curr][0][1]
+		curr = visited[get_key(curr)][2]
+		# curr = [(j,k) for (i,j,k,l) in visited if j==curr][0][1]
 		path.append(curr)
 	path.reverse()
 	return path
@@ -71,10 +76,16 @@ def get_path_in_floyd(start,goal,predecessor,distance):
 
 def ezsolver(starts,goals,predecessor,distance):
 	res = [get_path_in_floyd(starts[i],goals[i],predecessor,distance) for i in xrange(len(starts))]
-	# print("res: ",res)
 	return schedule([i[0] for i in res],[i[1] for i in res])
 	 
+def RRT(starts,goals,G):
+	(predecessor,distance) = floyd_warshall_predecessor_and_distance(G, weight='weight')
 
+	# perm_generator = 
+	return 
+
+def total_distance(starts,goals,distance):
+	return sum([distance[starts[i]][goals[i]] for i in xrange(len(starts))])
 
 G=nx.Graph()
 
@@ -90,7 +101,10 @@ G.add_edge(4,5,weight=2)
 pos={1:[1,1],2:[2,1],3:[1,2],4:[2,2],5:[3,1.5]}
 
 (predecessor,distance) = floyd_warshall_predecessor_and_distance(G, weight='weight')
-print "answer: %s" % ezsolver([1,5],[5,3],predecessor,distance)
+starts = [[1,2]]
+goals = [5,1]
+print "answer: %s" % [ezsolver(key,goals,predecessor,distance) for key in starts]
+print "total_distance: %s" % [total_distance(key,goals,distance) for key in starts]
 
 
 
