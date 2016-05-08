@@ -77,10 +77,20 @@ def get_path_in_floyd(start,goal,predecessor,distance):
 def ezsolver(starts,goals,predecessor,distance):
 	res = [get_path_in_floyd(starts[i],goals[i],predecessor,distance) for i in xrange(len(starts))]
 	return schedule([i[0] for i in res],[i[1] for i in res])
-	 
-def RRT(starts,goals,G):
-	(predecessor,distance) = floyd_warshall_predecessor_and_distance(G, weight='weight')
 
+def rand_conf(n,G,visited):
+	c = [a for a in G.nodes()]
+	while True:
+		a = tuple(random.sample(c,n))
+		if a not in visited:
+			visited |= set([a])
+			return a
+
+def RRT(init,goal,conf_space):
+	(predecessor,distance) = floyd_warshall_predecessor_and_distance(conf_space, weight='weight')
+	visited = {} 
+	G = nx.Graph()
+	
 	# perm_generator = 
 	return 
 
@@ -101,11 +111,14 @@ G.add_edge(4,5,weight=2)
 pos={1:[1,1],2:[2,1],3:[1,2],4:[2,2],5:[3,1.5]}
 
 (predecessor,distance) = floyd_warshall_predecessor_and_distance(G, weight='weight')
-starts = [[1,2]]
-goals = [5,1]
+starts = [[1,5],[2,3],[4,5]]
+goals = [1,4]
 print "answer: %s" % [ezsolver(key,goals,predecessor,distance) for key in starts]
 print "total_distance: %s" % [total_distance(key,goals,distance) for key in starts]
 
+# visited = {(1,5),(2,3),(4,5),(1,4),(1,3),(1,2),(2,1),(2,4),(2,5)} 
+# for i in range(5):
+# 	print "random: %s" % (rand_conf(2,G,visited),)
 
 
 # nodes
