@@ -9,15 +9,18 @@ from heapq import heappop
 import sys
 import signal
 
-
+#Just creates keys for configurations by concatenation
 def get_key(pose):
 	return ",".join("{0}".format(n) for n in pose)
 
+#The infrastructure of EZ-Solver is this. It searches through C_EZ
+#using A-star search algorithm. Note that it doesn't construct C_EZ at once,
+#because the memory it needs could be ridiculously large!
 def schedule(paths,costs):
 	cumulative_cost = [[sum(k[i:]) if i!=len(k) else 0 for i in xrange(len(k)+1)] for k in costs]
 	# print "cumulative_cost: %s" % cumulative_cost
 	q = Q.PriorityQueue()
-	init_pos = tuple(0 for key in paths) 
+	init_pos = tuple(0 for key in paths)
 	#The data structure for priority queue is (f,current,parent,cost)
 	#parent is used to get the final path in C(EZ) if any 
 	init_h = sum([i[0] for i in cumulative_cost])
@@ -26,7 +29,7 @@ def schedule(paths,costs):
 	goal = tuple(len(key)-1 for key in paths)
 
 	while not q.empty():
-		u = q.get() 
+		u = q.get()
 		#print "pop: %s" % str(u)
 
 		if u[1] == goal:
@@ -51,20 +54,21 @@ def schedule(paths,costs):
 
 	return []
 
+#Once the goal configuration is found in C_EZ, it iteratively builds up
+#the path using each node's parent
 def get_path_in_cez(visited,goal,paths):
 	path = [goal]
 	curr = goal
 	start = tuple(0 for k in range(len(goal)))
 	while curr != start:
 		curr = visited[get_key(curr)][2]
-		# curr = [(j,k) for (i,j,k,l) in visited if j==curr][0][1]
 		path.append(curr)
 	path.reverse()
 	return [tuple(paths[i][a[i]] for i in range(len(a))) for a in path]
 
+#To retrieve the optimal path and the cost from floyd's solutions
 def get_path_in_floyd(start,goal):
-	global distance
-	global predecessor
+	global distance, predecessor
 	path = [goal]
 	cost = []
 	curr = goal
@@ -77,12 +81,13 @@ def get_path_in_floyd(start,goal):
 	cost.reverse()
 	return (path,cost)
 
+#EZ-Solver function which passes optimal paths and their costs to schedule function
 def ezsolver(starts,goals):
-	global distance
-	global predecessor
+	global distance, predecessor
 	res = [get_path_in_floyd(starts[i],goals[i]) for i in xrange(len(starts))]
 	return schedule([i[0] for i in res],[i[1] for i in res])
 
+#Generate a random configuration in joint-configuration space
 def rand_conf(n,G,visited,max_size):
 	c = [a for a in G.nodes()]
 	if max_size == len(visited):
@@ -92,6 +97,7 @@ def rand_conf(n,G,visited,max_size):
 		if a not in visited:
 			return a
 
+#This would return a priority queue on distance 
 def NEAR(point):
 	global distance
 	near = []
@@ -99,14 +105,84 @@ def NEAR(point):
 		heappush(near,(total_distance(tree.node[n]['pose'],point),tree.node[n]['pose']))
 	return near
 
+#This function returns nearest nodes considering the cost from root
+def NEAR_OPTIMAL(point):
+	global distance
+	all_near = NEAR(point)
+	temp = list(all_near)
+	near = []
+	while len(all_near)>0 and all_near[0][0]<radius:
+		next = heappop(all_near)
+		heappush(near,(next[0]+tree.node[get_key(next[1])]['cost'],next[1]))
+	return [near,temp]
+
+def RRT_star(q_init,q_goal,conf_space):
+	global distance, predecessor, tree, radius
+	visited = {q_init,q_goal}
+	tree.add_node(get_key(q_init),pose=q_init,parent=None,cost=0)
+	__n__ = len(list(conf_space.nodes()))
+	__k__ = len(q_goal)
+	num_of_states = 1
+	for i in range(__n__-__k__+1,__n__+1):
+		num_of_states *= i
+	while len(visited)<=num_of_states:
+		radius = max(int(((gamma/zeta)*(math.log(len(visited))/len(visited)))**(1.0/dimension)),eta)
+		# print "radius: %s" % radius
+		q_rand = rand_conf(__k__,conf_space,visited,num_of_states)
+		all_near = NEAR_OPTIMAL(q_rand)
+		while True:
+			nearest = heappop(all_near[0])
+			path = ezsolver(nearest[1],q_rand)
+			if len(path) != 0:
+				# print "sample: %s" % (q_rand,)
+				# print "nearest: %s" % (nearest,)
+
+				tree.add_node(get_key(q_rand),pose=q_rand,parent=nearest[1],cost=nearest[0])
+				tree.add_edge(get_key(q_rand),get_key(nearest[1]),weight=total_distance(nearest[1],q_rand),path=path)
+				visited |= set([q_rand]) 
+				# near = []
+				# while len(temp)>0 and temp[0][0]<radius:
+				# 	near.append(heappop(temp))
+
+				# print "optimal_near: %s" % all_near[0]			
+
+				# pos=nx.spring_layout(tree,k=50,scale=10,iterations=10) # positions for all nodes
+				# plt.figure(2)
+				# nx.draw_networkx_nodes(tree,pos,node_size=1000,node_color='c')
+				# nx.draw_networkx_edges(tree,pos,width=6)
+				# nx.draw_networkx_labels(tree,pos,font_size=20,font_family='sans-serif')
+				# edge_labels = nx.get_edge_attributes(tree,'weight')
+				# nx.draw_networkx_edge_labels(tree,pos,edge_labels=edge_labels)
+				# node_labels = nx.get_node_attributes(tree,'cost')
+				# nx.draw(tree,pos,labels=node_labels)
+				# plt.axis('off')
+				# plt.show()
+							
+				#This part stands for rewiring the tree
+				for n in all_near[1]:
+					if n[1] != nearest:
+						path = ezsolver(n[1],q_rand)	
+						if len(path) != 0:
+							costp = n[0]+tree.node[get_key(q_rand)]['cost']
+							if costp<tree.node[get_key(n[1])]['cost']:	
+								tree.remove_edge(get_key(n[1]),get_key(tree.node[get_key(n[1])]['parent']))
+								tree.add_edge(get_key(n[1]),get_key(q_rand),weight=n[0],path=path)
+								tree.node[get_key(n[1])]['cost'] = costp
+
+				break
+			elif len(all_near[0]) == 0:
+				break
+
+
+
+
+#RRT never gets out unless interrupted by Ctrl+c. It then prints the best possible answer so far
 tree = nx.Graph()
 def RRT(q_init,q_goal,conf_space):
-	global distance
-	global predecessor
+	global distance, predecessor, tree
 	visited = {q_init,q_goal}
-	global tree
 	tree.add_node(get_key(q_init),pose=q_init,parent=None)
-	__n__ = len(list(conf_space.nodes()))
+	__n__ = len(list(conf_space.nodes()))#P(n,k)
 	__k__ = len(q_goal)
 	num_of_states = 1
 	for i in range(__n__-__k__+1,__n__+1):
@@ -125,11 +201,12 @@ def RRT(q_init,q_goal,conf_space):
 			elif len(near) == 0:
 				break
 
-	return 
-
+#Distance between two configurations in joint-configuration space
 def total_distance(starts,goals):
 	return sum([distance[starts[i]][goals[i]] for i in xrange(len(starts))])
 
+#From some point on EZ-Solver can solve the problem so we are going to need 
+#the solution from start until this point
 def get_path_before_ez(pose):
 	path = []
 	curr = pose
@@ -138,6 +215,7 @@ def get_path_before_ez(pose):
 		curr = tree.node[get_key(curr)]['parent']
 	return list(reversed(path))
 
+#BFS is used to find the path from start to end configurations in RRT result
 def BFS(start,end):
 	global tree
 	q = Q.PriorityQueue()
@@ -159,15 +237,11 @@ def BFS(start,end):
 			q.put((cost+tree.get_edge_data(get_key(pose),a)['weight'],tree.node[a]['pose'],pose))
 	return []
 
+#This computes the solution cost
 def get_solution_cost(solution):
-	global tree
-	global distance
+	global tree, distance
 	num_of_robots = len(solution[0])
-	# for i in range(len(solution)-1):
-	# 	for j in range(num_of_robots):
-	# 		print "dis: %s" % distance[solution[i][j]][solution[i+1][j]]
 	return sum([distance[solution[i][j]][solution[i+1][j]] for i in range(len(solution)-1) for j in range(num_of_robots)])
-	# return 0
 
 G=nx.Graph()
 G.add_edge(1,2,weight=5)
@@ -179,13 +253,15 @@ G.add_edge(2,5,weight=4)
 G.add_edge(4,5,weight=2)
 home = (1,3)
 destination = (2,4)
+zeta = 1.0 
+gamma = 1000.0
+eta = 10
+dimension = len(home)
+radius = 10 
 (predecessor,distance) = floyd_warshall_predecessor_and_distance(G, weight='weight')
 
 def run_program():
-	global G
-	global home
-	global destination
-	# pos=nx.spring_layout(G,k=10/math.sqrt(G.order()),scale=2,iterations=100) # positions for all nodes
+	global G,home,destination
 	pos={1:[1,1],2:[2,1],3:[1,2],4:[2,2],5:[3,1.5]}
 
 	plt.figure(1)
@@ -194,8 +270,6 @@ def run_program():
 
 	# edges
 	nx.draw_networkx_edges(G,pos,width=6)
-	# nx.draw_networkx_edges(G,pos,edgelist=esmall,
-	#                     width=6,alpha=0.5,edge_color='b',style='dashed')
 
 	# labels
 	nx.draw_networkx_labels(G,pos,font_size=20,font_family='sans-serif')
@@ -205,14 +279,13 @@ def run_program():
 	plt.axis('off')
 	# plt.savefig("weighted_graph.png") # save as png
 
-
-
 	# starts = [[1,5],[2,3],[4,5]]
 	# goals = [1,4]
 	# print "answer: %s" % [ezsolver(key,goals) for key in starts]
 	# print "total_distance: %s" % [total_distance(key,goals) for key in starts]
 
-	RRT(home,destination,G)
+	# RRT(home,destination,G)
+	RRT_star(home,destination,G)
 
 
 def exit_gracefully(signum, frame):
