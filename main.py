@@ -35,19 +35,22 @@ def schedule(paths,costs):
 		if u[1] == goal:
 			return get_path_in_cez(visited,goal,paths)
 		#all possible neighbors
-		all_neighbors=[(u[3]+costs[i][u[1][i]+j-1 if j==1 else u[1][i]+j]+sum([cumulative_cost[i][u[1][i]+j] if c==i else cumulative_cost[c][u[1][c]] for c in xrange(len(costs))]),u[1][:i]+(u[1][i]+j,)+u[1][i+1:],u[1],u[3]+costs[i][u[1][i]+j-1 if j==1 else u[1][i]+j]) for i in xrange(len(paths)) for j in [-1,1] if (u[1][i]+j>=0 and u[1][i]+j<len(paths[i])) ]
+		all_neighbors=[(u[3]+costs[i][u[1][i]+j-1 if j==1 else u[1][i]+j]+sum([cumulative_cost[i][u[1][i]+j] if c==i else cumulative_cost[c][u[1][c]] for c in range(len(costs))]),u[1][:i]+(u[1][i]+j,)+u[1][i+1:],u[1],u[3]+costs[i][u[1][i]+j-1 if j==1 else u[1][i]+j]) for i in range(len(paths)) for j in [-1,1] if (u[1][i]+j>=0 and u[1][i]+j<len(paths[i])) ]
 		#filtering out visited neighbors
 		new_neighbors=[(i,j,k,l) for (i,j,k,l) in all_neighbors if get_key(j) not in visited.keys()  ]	
 
 		#removing collisions(illegals)
-		for i in xrange(len(new_neighbors)):
+		for i in range(len(new_neighbors)):
 			b = True
-			for j in xrange(len(new_neighbors[i][1])):
+			for j in range(len(new_neighbors[i][1])):
 				for k in range(j+1,len(new_neighbors[i][1])):
 					if paths[j][new_neighbors[i][1][j]]==paths[k][new_neighbors[i][1][k]] :
 						b = False 
-						j = len(new_neighbors[i][1])
-						k = len(new_neighbors[i][1])
+						break
+						# j = len(new_neighbors[i][1])
+						# k = len(new_neighbors[i][1])
+				if b is False:
+					break	
 			if b:
 				q.put(new_neighbors[i])	
 				visited[get_key(new_neighbors[i][1])] = new_neighbors[i]
@@ -130,7 +133,7 @@ def RRT_star(q_init,q_goal,conf_space):
 		# print "radius: %s" % radius
 		q_rand = rand_conf(__k__,conf_space,visited,num_of_states)
 		all_near = NEAR_OPTIMAL(q_rand)
-		while True:
+		while len(all_near[0])>0:
 			nearest = heappop(all_near[0])
 			path = ezsolver(nearest[1],q_rand)
 			if len(path) != 0:
@@ -160,18 +163,21 @@ def RRT_star(q_init,q_goal,conf_space):
 							
 				#This part stands for rewiring the tree
 				for n in all_near[1]:
+					if n[0] > radius:
+						break
 					if n[1] != nearest:
 						path = ezsolver(n[1],q_rand)	
 						if len(path) != 0:
 							costp = n[0]+tree.node[get_key(q_rand)]['cost']
 							if costp<tree.node[get_key(n[1])]['cost']:	
+								# print "node: %s" % tree.node[get_key(n[1])]
 								tree.remove_edge(get_key(n[1]),get_key(tree.node[get_key(n[1])]['parent']))
 								tree.add_edge(get_key(n[1]),get_key(q_rand),weight=n[0],path=path)
 								tree.node[get_key(n[1])]['cost'] = costp
+								tree.node[get_key(n[1])]['parent'] = q_rand
 
 				break
-			elif len(all_near[0]) == 0:
-				break
+
 
 
 
@@ -244,15 +250,36 @@ def get_solution_cost(solution):
 	return sum([distance[solution[i][j]][solution[i+1][j]] for i in range(len(solution)-1) for j in range(num_of_robots)])
 
 G=nx.Graph()
-G.add_edge(1,2,weight=5)
-G.add_edge(1,3,weight=2)
-G.add_edge(2,3,weight=9)
+# ############Example 1##############
+# G.add_edge(1,2,weight=5)
+# G.add_edge(1,3,weight=2)
+# G.add_edge(2,3,weight=9)
+# G.add_edge(3,4,weight=1)
+# G.add_edge(2,4,weight=1)
+# G.add_edge(2,5,weight=4)
+# G.add_edge(4,5,weight=2)
+# home = (1,3)
+# destination = (2,4)
+# pos={1:[1,1],2:[2,1],3:[1,2],4:[2,2],5:[3,1.5]}
+###################################
+############Example 2##############
+G.add_edge(1,2,weight=1)
+G.add_edge(1,3,weight=1)
+G.add_edge(3,2,weight=1)
 G.add_edge(3,4,weight=1)
-G.add_edge(2,4,weight=1)
-G.add_edge(2,5,weight=4)
-G.add_edge(4,5,weight=2)
-home = (1,3)
-destination = (2,4)
+G.add_edge(4,5,weight=1)
+G.add_edge(5,6,weight=1)
+G.add_edge(6,7,weight=1)
+G.add_edge(7,8,weight=1)
+G.add_edge(8,9,weight=1)
+G.add_edge(9,10,weight=1)
+G.add_edge(9,11,weight=1)
+G.add_edge(10,11,weight=1)
+home = (5,6,7)
+destination = (10,2,4)
+pos = nx.spring_layout(G)
+###################################
+
 zeta = 1.0 
 gamma = 1000.0
 eta = 10
@@ -262,7 +289,8 @@ radius = 10
 
 def run_program():
 	global G,home,destination
-	pos={1:[1,1],2:[2,1],3:[1,2],4:[2,2],5:[3,1.5]}
+	
+
 
 	plt.figure(1)
 	# nodes
@@ -277,12 +305,10 @@ def run_program():
 	nx.draw_networkx_edge_labels(G,pos,edge_labels=labels)
 
 	plt.axis('off')
-	# plt.savefig("weighted_graph.png") # save as png
 
 	# starts = [[1,5],[2,3],[4,5]]
 	# goals = [1,4]
-	# print "answer: %s" % [ezsolver(key,goals) for key in starts]
-	# print "total_distance: %s" % [total_distance(key,goals) for key in starts]
+	# print "answer: %s" % ezsolver(home,destination)
 
 	# RRT(home,destination,G)
 	RRT_star(home,destination,G)
